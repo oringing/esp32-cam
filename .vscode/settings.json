@@ -1,0 +1,21 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "D:/AIxiaozhi/Espressif/frameworks/esp-idf-v5.5/",
+  "idf.pythonInstallPath": "D:\\AIxiaozhi\\Espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.openOcdConfigs": [
+    "interface/ftdi/esp32_devkitj_v1.cfg",
+    "target/esp32.cfg"
+  ],
+  "idf.toolsPathWin": "D:\\AIxiaozhi\\Espressif",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32"
+  },
+  "files.associations": {
+    "esp_http_server.h": "c",
+    "esp_wifi.h": "c",
+    "freertos.h": "c",
+    "esp_event.h": "c"
+  },
+  "idf.flashType": "UART",
+  "idf.portWin": "COM4"
+}

@@ -1,0 +1,21 @@
+dependencies:
+  espressif/esp_jpeg:
+    component_hash: defb83669293cbf86d0fa86b475ba5517aceed04ed70db435388c151ab37b5d7
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.3.1
+  idf:
+    source:
+      type: idf
+    version: 5.5.0
+direct_dependencies:
+- espressif/esp_jpeg
+- idf
+manifest_hash: c7b5766d21a27166547745ba58ba1b5abee8786efd7d26db400e8b0388aa5d44
+target: esp32
+version: 2.0.0
