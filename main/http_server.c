@@ -85,7 +85,7 @@ void http_server_start(void) {
         if (sta_netif != NULL) {
             esp_netif_ip_info_t ip_info;
             esp_netif_get_ip_info(sta_netif, &ip_info);
-            ESP_LOGI(TAG, "局域网访问地址: http://" IPSTR, IP2STR(&ip_info.ip));
+            ESP_LOGI(TAG, "局域网访问地址: http://" IPSTR, IP2STR(&ip_info.ip), HTTP_SERVER_PORT);
         } else {
             ESP_LOGE(TAG, "无法获取WiFi接口信息");
         }

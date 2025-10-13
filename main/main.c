@@ -5,7 +5,7 @@
 #include "wifi.h"
 #include "camera.h"
 #include "http_server.h"
-#include "mqtt_client.h"
+#include "mqtt.h"
 
 static const char *TAG = "cam_http_server";
 
@@ -44,7 +44,7 @@ void app_main(void) {
     http_server_start();
     
     // 4. 启动MQTT客户端
-    //mqtt_app_start();
+    mqtt_app_start();
     
     ESP_LOGI(TAG, "ESP32-CAM项目启动完成");
 }
