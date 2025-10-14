@@ -15,7 +15,10 @@
     "esp_wifi.h": "c",
     "freertos.h": "c",
     "esp_event.h": "c",
-    "esp_log.h": "c"
+    "esp_log.h": "c",
+    "esp_chip_info.h": "c",
+    "spi_flash_mmap.h": "c",
+    "esp_heap_caps.h": "c"
   },
   "idf.flashType": "UART",
   "idf.portWin": "COM4"
