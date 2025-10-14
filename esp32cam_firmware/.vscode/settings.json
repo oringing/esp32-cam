@@ -3,8 +3,7 @@
   "idf.espIdfPathWin": "D:/AIxiaozhi/Espressif/frameworks/esp-idf-v5.5/",
   "idf.pythonInstallPath": "D:\\AIxiaozhi\\Espressif\\tools\\idf-python\\3.11.2\\python.exe",
   "idf.openOcdConfigs": [
-    "interface/ftdi/esp32_devkitj_v1.cfg",
-    "target/esp32.cfg"
+    "board/esp32-wrover-kit-3.3v.cfg"
   ],
   "idf.toolsPathWin": "D:\\AIxiaozhi\\Espressif",
   "idf.customExtraVars": {

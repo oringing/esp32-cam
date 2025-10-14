@@ -66,6 +66,7 @@ void app_main(void) {
     uint32_t flash_free_size = (flash_total_size >= flash_used_size) ? (flash_total_size - flash_used_size) : 0;
 
     // 4. 打印所有Flash容量信息
+
     ESP_LOGI(TAG, "实际Flash总物理容量: %u 字节 (%.2f MB)", 
              flash_total_size, (float)flash_total_size / (1024 * 1024));
     ESP_LOGI(TAG, "已使用容量（分区表已分配）: %u 字节 (%.2f MB)", 
