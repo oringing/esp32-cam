@@ -1,0 +1,10 @@
+{
+    "idf.espIdfPathWin": "D:/AIxiaozhi/Espressif/frameworks/esp-idf-v5.5/",
+    "idf.toolsPathWin": "D:\\AIxiaozhi\\Espressif",
+    "idf.pythonInstallPath": "D:\\AIxiaozhi\\Espressif\\tools\\idf-python\\3.11.2\\python.exe",
+    "idf.portWin": "COM4",
+    "idf.flashType": "UART",
+    "idf.openOcdConfigs": [
+        "board/esp32-wrover-kit-3.3v.cfg"
+    ]
+}

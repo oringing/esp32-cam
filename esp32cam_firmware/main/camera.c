@@ -27,11 +27,11 @@ esp_err_t camera_init_custom(void) {
         .ledc_timer = LEDC_TIMER_0,
         .ledc_channel = LEDC_CHANNEL_0,
         .pixel_format = PIXFORMAT_JPEG,
-        .frame_size = FRAMESIZE_XGA,
+        .frame_size = FRAMESIZE_SVGA,
         /*FRAMESIZE_QVGA (320x240)，FRAMESIZE_VGA (640x480) ，FRAMESIZE_SVGA (800x600)，FRAMESIZE_XGA (1024x768)- 当前设置*/
-        .jpeg_quality = 50,  // JPEG质量30-50，平衡质量与性能
+        .jpeg_quality = 30,  // JPEG质量30-50，平衡质量与性能
         .fb_count = 2,       // 双缓冲减少卡顿
-        .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
+        .grab_mode = CAMERA_GRAB_LATEST,
     };
     
     ESP_LOGI(TAG, "开始初始化摄像头...");

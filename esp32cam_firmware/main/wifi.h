@@ -1,9 +1,9 @@
 #ifndef WIFI_H
 #define WIFI_H
 
-// WiFi配置
-#define WIFI_SSID "Redmi Note 12 Turbo"
-#define WIFI_PWD "88888888"
+// // WiFi配置
+#define WIFI_SSID "YOUR_WIFI_NAME"
+#define WIFI_PWD "YOUR_WIFI_PASSWORD" //若 WiFi 无密码，将WIFI_PWD ""引号内留空即可
 
 // WiFi连接配置
 #define WIFI_MAXIMUM_RETRY 5

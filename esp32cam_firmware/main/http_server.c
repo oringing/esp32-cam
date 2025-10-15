@@ -81,11 +81,11 @@ void http_server_start(void) {
         httpd_register_uri_handler(server, &video_uri);
 
         // v5.5兼容的IP地址获取方式
-        esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+       esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
         if (sta_netif != NULL) {
             esp_netif_ip_info_t ip_info;
             esp_netif_get_ip_info(sta_netif, &ip_info);
-            ESP_LOGI(TAG, "局域网访问地址: http://" IPSTR, IP2STR(&ip_info.ip), HTTP_SERVER_PORT);
+            ESP_LOGI(TAG, "局域网访问地址: http://" IPSTR ":%d", IP2STR(&ip_info.ip), HTTP_SERVER_PORT);
         } else {
             ESP_LOGE(TAG, "无法获取WiFi接口信息");
         }

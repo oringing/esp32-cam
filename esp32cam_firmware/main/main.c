@@ -74,7 +74,7 @@ void app_main(void) {
     ESP_LOGI(TAG, "剩余容量（未分配）: %u 字节 (%.2f MB)", 
              flash_free_size, (float)flash_free_size / (1024 * 1024));
 
-    // 后续原有逻辑（WiFi、摄像头、服务器初始化）
+    //（WiFi、摄像头、服务器初始化）
     wifi_init();
 
     esp_err_t cam_err = camera_init_custom();
