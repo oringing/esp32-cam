@@ -16,7 +16,7 @@
 | 特性 | 详情 |
 |------|------|
 | 处理器 | 双核240MHz ESP32，支持蓝牙4.2 + BLE 🛜 |
-| 存储配置 | 4Mb SPI Flash +520kB RAM + 4MB PSRAM (超大扩展内存) 💾 |
+| 存储配置 | 4Mb SPI Flash +520kB SRAM + 4MB PSRAM (超大扩展内存) 💾 |
 | WiFi性能 | 2.4GHz频段，支持802.11b/g/n，板载2dBi天线 📶 |
 | 功耗控制 | Deep-sleep模式最低6mA，节能小能手 🌙 |
 | 扩展接口 | 支持TF卡(最大4GB)、UART/SPI/I2C等 🔌 |
