@@ -1,4 +1,6 @@
 {
   "usingComponents": {
-  }
+  },
+  "navigationBarTitleText": "MQTT服务器连接测试"
+  
 }

@@ -7,12 +7,37 @@
 
 static const char *TAG = "mqtt_client";
 static esp_mqtt_client_handle_t client;
+static bool streaming = false;
+static TaskHandle_t stream_task_handle = NULL;
 
 static void log_error_if_nonzero(const char *message, int error_code)
 {
     if (error_code != 0) {
         ESP_LOGE(TAG, "Last error %s: 0x%x", message, error_code);
     }
+}
+
+// 视频流任务函数
+static void video_stream_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "视频流任务已启动");
+    const int frame_delay = 100; // 10 FPS
+
+    while (streaming) {
+        camera_fb_t *fb = camera_capture();
+        if (fb) {
+            // 发布图片数据到流主题
+            esp_mqtt_client_publish(client, MQTT_STREAM_TOPIC, (const char*)fb->buf, fb->len, 0, 0);
+            esp_camera_fb_return(fb);
+        } else {
+            ESP_LOGW(TAG, "获取摄像头画面失败");
+        }
+        vTaskDelay(pdMS_TO_TICKS(frame_delay));
+    }
+
+    ESP_LOGI(TAG, "视频流任务已停止");
+    stream_task_handle = NULL;
+    vTaskDelete(NULL);
 }
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -29,6 +54,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+        streaming = false;
         break;
 
     case MQTT_EVENT_SUBSCRIBED:
@@ -54,6 +80,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 esp_mqtt_client_publish(client, MQTT_IMAGE_TOPIC, (const char*)fb->buf, fb->len, 0, 0);
                 esp_camera_fb_return(fb);
             }
+        } else if (strncmp(event->data, "start_stream", event->data_len) == 0) {
+            ESP_LOGI(TAG, "Starting video stream...");
+            start_video_stream();
+        } else if (strncmp(event->data, "stop_stream", event->data_len) == 0) {
+            ESP_LOGI(TAG, "Stopping video stream...");
+            stop_video_stream();
         }
         break;
     case MQTT_EVENT_ERROR:
@@ -68,6 +100,27 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     default:
         ESP_LOGI(TAG, "Other event id:%d", event->event_id);
         break;
+    }
+}
+
+void start_video_stream(void)
+{
+    if (!streaming) {
+        streaming = true;
+        BaseType_t result = xTaskCreate(video_stream_task, "video_stream", 4096, NULL, 5, &stream_task_handle);
+        if (result != pdTRUE) {
+            ESP_LOGE(TAG, "创建视频流任务失败");
+            streaming = false;
+        }
+    }
+}
+
+void stop_video_stream(void)
+{
+    streaming = false;
+    if (stream_task_handle) {
+        vTaskDelete(stream_task_handle);
+        stream_task_handle = NULL;
     }
 }
 
