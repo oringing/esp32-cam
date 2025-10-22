@@ -1,0 +1,45 @@
+<!--pages/camera/camera.wxml-->
+<view class="container">
+  <view class="section-title">摄像头控制面板</view>
+  
+  <!-- ESP32-CAM IP地址输入 -->
+  <view class="input-group">
+    <view class="label">ESP32-CAM IP地址：</view>
+    <input class="input" bindinput="setCamIp" value="{{ camIp }}" placeholder="例如: 192.168.1.100" />
+  </view>
+  
+  <!-- 视频流显示区域 -->
+  <view class="video-section">
+    <view class="section-title">实时视频流</view>
+    <view wx:if="{{ showWebView }}" class="webview-container">
+      <web-view src="{{ webViewUrl }}"></web-view>
+    </view>
+    <view wx:else class="placeholder">
+      点击"显示视频流"按钮查看实时画面
+    </view>
+    
+    <view class="button-group">
+      <button type="primary" bindtap="showStream">显示视频流</button>
+      <button type="warn" bindtap="hideStream">隐藏视频流</button>
+    </view>
+  </view>
+  
+  <!-- 拍照控制区域 -->
+  <view class="control-section">
+    <view class="section-title">拍照控制</view>
+    <view class="button-group">
+      <button type="primary" bindtap="takePicture">拍照</button>
+      <button type="default" bindtap="saveToAlbum">保存到相册</button>
+    </view>
+    <image wx:if="{{ capturedImage }}" class="captured-image" src="{{ capturedImage }}" mode="widthFix"></image>
+  </view>
+  
+  <!-- 视频流控制区域 -->
+  <view class="stream-section">
+    <view class="section-title">视频流传输</view>
+    <view class="button-group">
+      <button type="primary" bindtap="startVideoStream">开始视频流</button>
+      <button type="warn" bindtap="stopVideoStream">停止视频流</button>
+    </view>
+  </view>
+</view>

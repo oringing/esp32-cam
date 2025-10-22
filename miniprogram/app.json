@@ -1,11 +1,12 @@
 {
   "pages": [
     "pages/index/index",
+    "pages/camera/camera",
     "pages/logs/logs"
   ],
   "window": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "Weixin",
+    "navigationBarTitleText": "ESP32CAM控制端",
     "navigationBarBackgroundColor": "#ffffff"
   },
   "style": "v2",

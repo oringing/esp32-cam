@@ -1,27 +1,31 @@
-<!--index.wxml-->
-<scroll-view class="scrollarea" scroll-y type="list">
-  <view class="container">
-    <view class="userinfo">
-      <block wx:if="{{canIUseNicknameComp && !hasUserInfo}}">
-        <button class="avatar-wrapper" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
-          <image class="avatar" src="{{userInfo.avatarUrl}}"></image>
-        </button>
-        <view class="nickname-wrapper">
-          <text class="nickname-label">昵称</text>
-          <input type="nickname" class="nickname-input" placeholder="请输入昵称" bind:change="onInputChange" />
-        </view>
-      </block>
-      <block wx:elif="{{!hasUserInfo}}">
-        <button wx:if="{{canIUseGetUserProfile}}" bindtap="getUserProfile"> 获取头像昵称 </button>
-        <view wx:else> 请使用2.10.4及以上版本基础库 </view>
-      </block>
-      <block wx:else>
-        <image bindtap="bindViewTap" class="userinfo-avatar" src="{{userInfo.avatarUrl}}" mode="cover"></image>
-        <text class="userinfo-nickname">{{userInfo.nickName}}</text>
-      </block>
-    </view>
-    <view class="usermotto">
-      <text class="user-motto">{{motto}}</text>
-    </view>
+<!--pages/index/index.wxml-->
+<view class="container">
+  <view class="label">连接地址（域名）：</view>
+  <input bindinput="setHost" value="{{ host }}" />
+  <view class="is-flex">
+    <button type="primary" bindtap="connect">{{ conenctBtnText }}</button>
+    <button type="warn" disabled="{{ conenctBtnText === '连接' }}" bindtap="disconnect">断开连接</button>
   </view>
-</scroll-view>
+  <view class="label">订阅主题：</view>
+  <input bindinput="setSubTopic" value="{{ subTopic }}" />
+  <view class="is-flex">
+    <button type="primary" bindtap="subscribe">订阅</button>
+    <button type="warn" bindtap="unsubscribe">取消订阅</button>
+  </view>
+  <view class="label">发布主题：</view>
+  <input bindinput="setPubTopic" value="{{ pubTopic }}" />
+  <view class="label">发布消息：</view>
+  <input bindinput="setPubMsg" value="{{ pubMsg }}"></input>
+  <view class="is-flex">
+    <button type="primary" bindtap="publish">发布</button>
+  </view>
+  <view class="label">收到的消息：</view>
+  <view class="received-msg-box">
+    <rich-text nodes="{{receivedMsg }}"></rich-text>
+  </view>
+  
+  <!-- 添加跳转到摄像头控制页面的按钮 -->
+  <view class="is-flex" style="margin-top: 50rpx;">
+    <button type="primary" bindtap="navigateToCamera">摄像头控制</button>
+  </view>
+</view>
