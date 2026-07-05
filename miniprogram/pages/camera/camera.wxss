@@ -1,6 +1,8 @@
 /* pages/camera/camera.wxss */
 .container {
   padding: 20rpx;
+  min-height: 100vh; /* 确保容器高度至少为屏幕高度 */
+  box-sizing: border-box; /* 避免padding导致溢出 */
 }
 
 .section-title {
@@ -41,13 +43,24 @@
   width: 48%;
 }
 
-.webview-container {
+/* 图像容器样式 */
+.image-container {
   width: 100%;
-  height: 400rpx;
   margin: 20rpx 0;
   border: 1px solid #ccc;
+  border-radius: 8rpx;
+  overflow: hidden;
+  background-color: #f5f5f5;
 }
 
+/* 流图像样式 - 重要：控制尺寸避免覆盖全屏 */
+.stream-image {
+  width: 100%;
+  height: auto;
+  max-height: 600rpx; /* 限制最大高度 */
+}
+
+/* 占位符样式 */
 .placeholder {
   height: 400rpx;
   display: flex;
@@ -55,15 +68,17 @@
   justify-content: center;
   background-color: #f5f5f5;
   color: #999;
-  border-radius: 8rpx;
+  font-size: 28rpx;
+}
+
+/* 提升控制面板的层级和布局 */
+.control-section, .stream-section, .video-section {
+  position: relative;
+  margin-bottom: 40rpx;
 }
 
 .captured-image {
   width: 100%;
   margin-top: 20rpx;
   border-radius: 8rpx;
-}
-
-.video-section, .control-section, .stream-section {
-  margin-bottom: 40rpx;
 }

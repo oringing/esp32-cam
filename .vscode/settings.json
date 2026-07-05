@@ -7,5 +7,6 @@
     "idf.openOcdConfigs": [
         "board/esp32-wrover-kit-3.3v.cfg"
     ],
-    "cmake.sourceDirectory": "D:/AIxiaozhi/MQTT/esp32-cam/camera_test/esp32cam_firmware"
+    "cmake.sourceDirectory": "D:/AIxiaozhi/MQTT/esp32-cam/camera_test/esp32cam_firmware",
+    "idf.currentSetup": "D:/AIxiaozhi/Espressif/frameworks/esp-idf-v5.5/"
 }

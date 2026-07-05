@@ -1,23 +1,29 @@
 <!--pages/camera/camera.wxml-->
-<view class="container">
+<scroll-view class="container" scroll-y="true">
   <view class="section-title">摄像头控制面板</view>
   
   <!-- ESP32-CAM IP地址输入 -->
   <view class="input-group">
     <view class="label">ESP32-CAM IP地址：</view>
-    <input class="input" bindinput="setCamIp" value="{{ camIp }}" placeholder="例如: 192.168.1.100" />
+    <input class="input" bindinput="setCamIp" value="{{ camIp }}" placeholder="例如: 192.168.94.76" />
   </view>
   
-  <!-- 视频流显示区域 -->
+  <!-- 视频流显示区域 - 使用image组件替代web-view -->
   <view class="video-section">
     <view class="section-title">实时视频流</view>
-    <view wx:if="{{ showWebView }}" class="webview-container">
-      <web-view src="{{ webViewUrl }}"></web-view>
+    <view class="image-container">
+      <image 
+        wx:if="{{ showStream && streamImageUrl }}" 
+        class="stream-image" 
+        src="{{ streamImageUrl }}" 
+        mode="widthFix" 
+        lazy-load="true"
+      />
+      <view wx:else class="placeholder">
+        <text>视频流未激活</text>
+      </view>
     </view>
-    <view wx:else class="placeholder">
-      点击"显示视频流"按钮查看实时画面
-    </view>
-    
+        
     <view class="button-group">
       <button type="primary" bindtap="showStream">显示视频流</button>
       <button type="warn" bindtap="hideStream">隐藏视频流</button>
@@ -42,4 +48,4 @@
       <button type="warn" bindtap="stopVideoStream">停止视频流</button>
     </view>
   </view>
-</view>
+</scroll-view>

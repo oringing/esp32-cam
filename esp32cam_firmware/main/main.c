@@ -6,6 +6,7 @@
 #include "camera.h"
 #include "http_server.h"
 #include "mqtt.h"
+#include "ota.h"
 #include "spi_flash_mmap.h"
 #include "esp_flash.h"
 #include "esp_partition.h"  // 新增：用于操作Flash分区表
@@ -85,6 +86,7 @@ void app_main(void) {
 
     http_server_start();
     mqtt_app_start();
+    ota_init();
     
     ESP_LOGI(TAG, "ESP32-CAM项目启动完成");
 }

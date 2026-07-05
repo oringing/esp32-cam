@@ -1,0 +1,22 @@
+# 忽略文档目录
+docs/ignore_docs/
+
+# 忽略小程序目录
+miniprogram\project.config.json
+
+.reasonix/
+.vscode/
+.mxproject
+*.ioc.backup
+
+.DS_Store
+
+Thumbs.db
+
+# 编译产物
+**/build/
+
+# ESP-IDF 自动生成
+sdkconfig.old
+dependencies.lock
+

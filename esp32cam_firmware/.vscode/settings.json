@@ -20,5 +20,6 @@
     "esp_heap_caps.h": "c"
   },
   "idf.flashType": "UART",
-  "idf.portWin": "COM4"
+  "idf.portWin": "COM19",
+  "idf.currentSetup": "D:/AIxiaozhi/Espressif/frameworks/esp-idf-v5.5/"
 }

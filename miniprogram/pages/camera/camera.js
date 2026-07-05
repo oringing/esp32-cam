@@ -2,13 +2,22 @@
 Page({
   data: {
     camIp: "", // ESP32-CAM的IP地址
-    showWebView: false, // 是否显示视频流
-    webViewUrl: "", // WebView的URL
+    showStream: false, // 是否显示视频流
+    streamImageUrl: "", // 视频流图像URL
+    showWebView: false, // 保留原变量，但不再使用
+    webViewUrl: "", // 保留原变量，但不再使用
     capturedImage: "", // 拍照后的图片临时路径
+    streamTimer: null, // 定时器引用
+    streamInterval: 1000, // 获取图像间隔(毫秒)
   },
 
   onLoad: function (options) {
     // 页面加载时的初始化操作
+  },
+
+  onUnload: function() {
+    // 页面卸载时清除定时器
+    this.stopStreamTimer();
   },
 
   // 设置ESP32-CAM IP地址
@@ -18,7 +27,7 @@ Page({
     });
   },
 
-  // 显示视频流
+  // 显示视频流 - 改为启动图像轮询
   showStream: function() {
     if (!this.data.camIp) {
       wx.showToast({
@@ -28,12 +37,13 @@ Page({
       return;
     }
     
-    // 构造视频流URL (ESP32-CAM默认端口是8080)
-    const url = `http://${this.data.camIp}:8080/`;
     this.setData({
-      showWebView: true,
-      webViewUrl: url
+      showStream: true,
+      streamImageUrl: `http://${this.data.camIp}:8080/?action=stream` // 尝试常见的ESP32-CAM流地址
     });
+    
+    // 启动定时器获取图像帧
+    this.startStreamTimer();
     
     wx.showToast({
       title: '正在加载视频流',
@@ -44,9 +54,35 @@ Page({
   // 隐藏视频流
   hideStream: function() {
     this.setData({
-      showWebView: false,
-      webViewUrl: ""
+      showStream: false,
+      streamImageUrl: ""
     });
+    this.stopStreamTimer();
+  },
+
+  // 启动流定时器 - 定期获取新的图像帧
+  startStreamTimer: function() {
+    this.stopStreamTimer(); // 先清除现有定时器
+    
+    const timer = setInterval(() => {
+      if (this.data.camIp && this.data.showStream) {
+        // 直接使用当前设置的streamImageUrl
+        // 由于小程序限制，我们无法动态更新image的src，所以通过setData更新
+        this.setData({
+          streamImageUrl: `http://${this.data.camIp}:8080/?action=stream&timestamp=${Date.now()}`
+        });
+      }
+    }, this.data.streamInterval);
+    
+    this.setData({ streamTimer: timer });
+  },
+
+  // 停止流定时器
+  stopStreamTimer: function() {
+    if (this.data.streamTimer) {
+      clearInterval(this.data.streamTimer);
+      this.setData({ streamTimer: null });
+    }
   },
 
   // 拍照功能
