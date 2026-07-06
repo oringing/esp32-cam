@@ -1,7 +1,12 @@
 #include "camera.h"
 #include "esp_log.h"
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "camera";
+
+#define CAMERA_PWDN_PIN GPIO_NUM_32
 
 esp_err_t camera_init_custom(void) {
     // 使用AI-Thinker ESP32-CAM模块的引脚配置
@@ -54,4 +59,12 @@ esp_err_t camera_init_custom(void) {
 
 camera_fb_t *camera_capture(void) {
     return esp_camera_fb_get();
+}
+
+void camera_power_off(void)
+{
+    gpio_set_direction(CAMERA_PWDN_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(CAMERA_PWDN_PIN, 1);
+    ESP_LOGI(TAG, "摄像头已断电（PWDN 拉高）");
+    vTaskDelay(pdMS_TO_TICKS(200));
 }

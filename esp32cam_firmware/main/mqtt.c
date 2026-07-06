@@ -4,6 +4,7 @@
 #include "nvs_flash.h"
 #include <string.h>
 #include "mqtt.h"
+#include "ota.h"
 
 static const char *TAG = "mqtt_client";
 static esp_mqtt_client_handle_t client;
@@ -86,6 +87,29 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         } else if (strncmp(event->data, "stop_stream", event->data_len) == 0) {
             ESP_LOGI(TAG, "Stopping video stream...");
             stop_video_stream();
+        } else if (strncmp(event->data, "ota_update ", 11) == 0) {
+            // 命令格式: ota_update http://192.168.5.100:8000/firmware.bin
+            // 跳过 "ota_update " 前缀获取 URL
+            const char *url = event->data + 11;
+            int url_len = event->data_len - 11;
+            if (url_len <= 0) {
+                ESP_LOGE(TAG, "OTA 升级地址为空");
+                return;
+            }
+            // 拷贝 URL 到临时缓冲区（确保 \0 结尾）
+            char url_buf[256];
+            int copy_len = (url_len < 255) ? url_len : 255;
+            strncpy(url_buf, url, copy_len);
+            url_buf[copy_len] = '\0';
+            ESP_LOGI(TAG, "收到 OTA 升级指令，地址: %s", url_buf);
+            // 关闭所有可能抢占 PSRAM 总线的模块
+            stop_video_stream();
+            camera_power_off();
+            vTaskDelay(pdMS_TO_TICKS(50));
+            esp_err_t ret = ota_start_download_async(url_buf);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "OTA 升级请求提交失败: %s", esp_err_to_name(ret));
+            }
         }
         break;
     case MQTT_EVENT_ERROR:
