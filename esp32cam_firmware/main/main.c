@@ -7,6 +7,7 @@
 #include "http_server.h"
 #include "mqtt.h"
 #include "ota.h"
+#include "esp_ota_ops.h"
 #include "spi_flash_mmap.h"
 #include "esp_flash.h"
 #include "esp_partition.h"  // 新增：用于操作Flash分区表
@@ -93,6 +94,12 @@ void app_main(void) {
     
     // 注册 OTA 完成回调（用于 OTA 失败后恢复摄像头）
     ota_set_complete_callback(ota_complete_handler, NULL);
+    
+    // OTA 回滚报到：确认本固件所有核心模块初始化成功
+    // 如果本固件是从 OTA 升级上来的，此调用告诉 Bootloader "我正常"
+    // 如果之前没调此函数就复位，Bootloader 会回滚到旧分区
+    esp_ota_mark_app_valid_cancel_rollback();
+    ESP_LOGI(TAG, "固件健康自检通过，已标记为有效版本");
     
     ESP_LOGI(TAG, "ESP32-CAM项目启动完成");
 }
