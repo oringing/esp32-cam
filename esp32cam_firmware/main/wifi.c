@@ -1,10 +1,11 @@
-#include "wifi.h"
+﻿#include "wifi.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
+#include "mdns.h"
 
 static const char *TAG = "wifi";
 
@@ -78,6 +79,16 @@ void wifi_init(void) {
 
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "WiFi连接成功");
+
+        // 启动 mDNS 服务，浏览器可通过 esp32cam.local 访问
+        esp_err_t mdns_err = mdns_init();
+        if (mdns_err == ESP_OK) {
+            mdns_hostname_set("esp32cam");
+            mdns_instance_name_set("ESP32-CAM Control Panel");
+            ESP_LOGI(TAG, "mDNS 已启动: esp32cam.local");
+        } else {
+            ESP_LOGE(TAG, "mDNS 启动失败: %s", esp_err_to_name(mdns_err));
+        }
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "WiFi连接失败");
     } else {
