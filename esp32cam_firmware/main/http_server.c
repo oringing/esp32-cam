@@ -4,6 +4,7 @@
 #include "esp_camera.h"
 #include "esp_netif.h"
 #include <string.h>
+#include "camera.h"
 
 static const char *TAG = "http_server";
 
@@ -20,7 +21,7 @@ static esp_err_t video_handler(httpd_req_t *req) {
     const int max_retries = 15;
 
     while (retry_count < max_retries) {
-        fb = esp_camera_fb_get();
+        fb = camera_capture();
         if (!fb) {
             ESP_LOGW(TAG, "获取帧数据失败，重试 %d/%d", retry_count+1, max_retries);
             retry_count++;

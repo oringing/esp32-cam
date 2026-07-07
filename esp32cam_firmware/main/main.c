@@ -13,6 +13,9 @@
 
 static const char *TAG = "cam_http_server";
 
+// 前向声明：OTA 完成回调（定义在 app_main 之后）
+static void ota_complete_handler(esp_err_t result, void *ctx);
+
 void app_main(void) {
     // 初始化NVS
     esp_err_t ret = nvs_flash_init();
@@ -88,5 +91,26 @@ void app_main(void) {
     mqtt_app_start();
     ota_init();
     
+    // 注册 OTA 完成回调（用于 OTA 失败后恢复摄像头）
+    ota_set_complete_callback(ota_complete_handler, NULL);
+    
     ESP_LOGI(TAG, "ESP32-CAM项目启动完成");
+}
+
+/**
+ * ota_complete_handler - OTA 完成回调
+ * 当 OTA 失败时（如 URL 错误、网络超时），摄像头已被断电，
+ * 此回调用于恢复摄像头供电和重新初始化。
+ */
+static void ota_complete_handler(esp_err_t result, void *ctx)
+{
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "OTA 升级失败 (%s)，正在恢复摄像头...", esp_err_to_name(result));
+        esp_err_t cam_err = camera_reinit();
+        if (cam_err == ESP_OK) {
+            ESP_LOGI(TAG, "摄像头已恢复，请刷新浏览器重新查看视频流");
+        } else {
+            ESP_LOGE(TAG, "摄像头恢复失败: %s", esp_err_to_name(cam_err));
+        }
+    }
 }
