@@ -5,7 +5,6 @@
 #include "esp_netif.h"
 #include <string.h>
 #include "camera.h"
-#include "mqtt.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
 #include "esp_system.h"
@@ -14,6 +13,17 @@
 
 static const char *TAG = "http_server";
 static volatile bool g_streaming_enabled = true;
+
+/* ================================================================
+ * OTA 升级进度共享变量 (upload_handler / progress_handler 共用)
+ * ================================================================ */
+static struct {
+    int  percent;   // 0-100
+    bool done;      // 升级完成标记
+    bool success;   // true=成功, false=失败
+} g_ota_progress = {0, false, false};
+static SemaphoreHandle_t g_ota_mutex = NULL;
+
 
 /* ================================================================
  * 控制面板 HTML 页面
@@ -148,9 +158,10 @@ function uploadFirmware(e){
         if(d.percent!==undefined){
           fill.style.width=d.percent+"%";txt.textContent="升级: "+d.percent+"%"
         }
-        if(d.done){evt.close();txt.textContent="升级完成! 即将重启...";isUploading=false}
+        if(d.done){evt.close();txt.textContent="升级成功! 即将重启...";setTimeout(function(){location.reload()},3000);isUploading=false}
+        if(d.error){evt.close();txt.textContent="升级失败! 请重试";isUploading=false}
       };
-      evt.onerror=function(){evt.close();txt.textContent="SSE断开, 设备可能已重启";isUploading=false}
+      evt.onerror=function(){evt.close();txt.textContent="SSE断开, 设备可能已重启";setTimeout(function(){location.reload()},2000);isUploading=false}
     }else{
       txt.textContent="上传失败: HTTP "+xhr.status;isUploading=false
     }
@@ -309,6 +320,213 @@ static esp_err_t api_led_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+
+// POST /upload — OTA 固件上传 & 写入
+static esp_err_t upload_handler(httpd_req_t *req) {
+    // 1. 解析 Content-Type -> boundary
+    char ctype[256] = {0};
+    if (httpd_req_get_hdr_value_str(req, "Content-Type", ctype, sizeof(ctype)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "缺少 Content-Type");
+        return ESP_FAIL;
+    }
+    char *bp = strstr(ctype, "boundary=");
+    if (!bp) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "非 multipart 请求");
+        return ESP_FAIL;
+    }
+    char boundary[72];
+    snprintf(boundary, sizeof(boundary), "--%s", bp + 9);
+    ESP_LOGI(TAG, "[OTA] 收到上传, boundary=%s, len=%d", boundary, req->content_len);
+
+    // 2. 断电摄像头 (释放 PSRAM)
+    camera_power_off();
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // 3. 获取 OTA 分区
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    if (!part) {
+        ESP_LOGE(TAG, "[OTA] 无可用 OTA 分区");
+        camera_reinit();
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "无可用 OTA 分区");
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "[OTA] 目标: %s (%d KB)", part->label, (int)(part->size / 1024));
+
+    // 4. 开始 OTA 会话
+    esp_ota_handle_t ota_handle;
+    esp_err_t err = esp_ota_begin(part, OTA_WITH_SEQUENTIAL_WRITES, &ota_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "[OTA] esp_ota_begin 失败: %s", esp_err_to_name(err));
+        camera_reinit();
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA init 失败");
+        return ESP_FAIL;
+    }
+
+    // 5. 接收整个 multipart body 到 PSRAM
+    int total = req->content_len;
+    char *raw = heap_caps_malloc(total + 1, MALLOC_CAP_SPIRAM);
+    if (!raw) {
+        ESP_LOGE(TAG, "[OTA] PSRAM alloc 失败 (%d bytes)", total);
+        esp_ota_abort(ota_handle);
+        camera_reinit();
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "PSRAM 不足");
+        return ESP_FAIL;
+    }
+    int got = 0;
+    while (got < total) {
+        int ret = httpd_req_recv(req, raw + got, total - got);
+        if (ret <= 0) {
+            ESP_LOGE(TAG, "[OTA] recv 失败 @ %d/%d, ret=%d", got, total, ret);
+            free(raw);
+            esp_ota_abort(ota_handle);
+            camera_reinit();
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "接收中断");
+            return ESP_FAIL;
+        }
+        got += ret;
+    }
+    raw[total] = 0;
+
+    // 6. 定位固件数据区: data_start (strstr, ASCII 区安全)
+    char *ps = strstr(raw, boundary);
+    if (!ps) { goto bad_multipart; }
+    char *he = strstr(ps, "\r\n\r\n");
+    if (!he) { goto bad_multipart; }
+    char *ds = he + 4;             // data_start
+
+    // 7. 定位 data_end: 二进制安全 -- 从尾部逆向搜索结束边界
+    char b_end[80];
+    int blen = snprintf(b_end, sizeof(b_end), "%s--", boundary);
+    char *de = NULL;
+    for (int i = total - blen; i >= (int)(ds - raw); i--) {
+        if (memcmp(raw + i, b_end, blen) == 0) {
+            de = raw + i; break;
+        }
+    }
+    if (!de) {
+        ESP_LOGE(TAG, "[OTA] 未找到结束边界 (%s)", b_end);
+        free(raw);
+        esp_ota_abort(ota_handle);
+        camera_reinit();
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No end boundary");
+        return ESP_FAIL;
+    }
+    // 剥掉 --boundary-- 前面的 \r\n
+    if (de > ds && *(de - 1) == '\n') de--;
+    if (de > ds && *(de - 1) == '\r') de--;
+    size_t fw_size = (size_t)(de - ds);
+    ESP_LOGI(TAG, "[OTA] 固件数据 %d bytes @ offset %d", (int)fw_size, (int)(ds - raw));
+
+    // 8. 分块写入 OTA 分区 + 更新进度
+    #define OTA_CHUNK 1024
+    size_t written = 0;
+    while (written < fw_size) {
+        size_t chunk = (fw_size - written > OTA_CHUNK) ? OTA_CHUNK : (fw_size - written);
+        err = esp_ota_write(ota_handle, ds + written, chunk);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "[OTA] write 失败 @ %d: %s", (int)written, esp_err_to_name(err));
+            if (xSemaphoreTake(g_ota_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+                g_ota_progress.done = true;
+                g_ota_progress.success = false;
+                xSemaphoreGive(g_ota_mutex);
+            }
+            free(raw);
+            esp_ota_abort(ota_handle);
+            camera_reinit();
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "写入失败");
+            return ESP_FAIL;
+        }
+        written += chunk;
+        if (xSemaphoreTake(g_ota_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            g_ota_progress.percent = (int)(written * 100 / fw_size);
+            xSemaphoreGive(g_ota_mutex);
+        }
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    free(raw);
+
+    // 9. 结束 OTA & 切换启动分区
+    err = esp_ota_end(ota_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "[OTA] esp_ota_end 失败: %s", esp_err_to_name(err));
+        camera_reinit();
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA end 失败");
+        return ESP_FAIL;
+    }
+    err = esp_ota_set_boot_partition(part);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "[OTA] set_boot_partition 失败: %s", esp_err_to_name(err));
+        camera_reinit();
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "boot 设置失败");
+        return ESP_FAIL;
+    }
+
+    // 10. 通知 SSE 完成
+    if (xSemaphoreTake(g_ota_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        g_ota_progress.percent = 100;
+        g_ota_progress.done = true;
+        g_ota_progress.success = true;
+        xSemaphoreGive(g_ota_mutex);
+    }
+
+    ESP_LOGI(TAG, "[OTA] 升级完成, 即将重启...");
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    vTaskDelay(pdMS_TO_TICKS(800));
+    esp_restart();
+    return ESP_OK;
+
+bad_multipart:
+    ESP_LOGE(TAG, "[OTA] 无法解析 multipart");
+    free(raw);
+    esp_ota_abort(ota_handle);
+    camera_reinit();
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Multipart 解析失败");
+    return ESP_FAIL;
+}
+
+// GET /progress — SSE 推送 OTA 进度
+static esp_err_t progress_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "text/event-stream");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    // 发送初始 keepalive 注释，让浏览器确认 SSE 连接已建立
+    httpd_resp_send_chunk(req, ":ok\n\n", 5);
+
+    int last_pct = -1;
+    char payload[72];
+    while (1) {
+        int pct = 0;
+        bool done = false;
+        bool ok = false;
+
+        if (xSemaphoreTake(g_ota_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+            pct = g_ota_progress.percent;
+            done = g_ota_progress.done;
+            ok = g_ota_progress.success;
+            xSemaphoreGive(g_ota_mutex);
+
+            if (done) {
+                int n = snprintf(payload, sizeof(payload),
+                                 ok ? "data: {\"done\":true}\n\n"
+                                    : "data: {\"error\":true}\n\n");
+                httpd_resp_send_chunk(req, payload, n);
+                httpd_resp_send_chunk(req, NULL, 0);
+                break;
+            }
+            if (pct != last_pct) {
+                last_pct = pct;
+                int n = snprintf(payload, sizeof(payload),
+                                 "data: {\"percent\":%d}\n\n", pct);
+                httpd_resp_send_chunk(req, payload, n);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+    return ESP_OK;
+}
+
+
 // GET /api/capture
 static esp_err_t api_capture_handler(httpd_req_t *req) {
     camera_fb_t *fb = camera_capture();
@@ -349,6 +567,13 @@ void http_server_start(void) {
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
     ESP_LOGI(TAG, "LEDC PWM 就绪: GPIO4, 5kHz, 默认灭 (duty=0)");
+    // --- OTA 进度互斥锁 ---
+    g_ota_mutex = xSemaphoreCreateBinary();
+    if (g_ota_mutex) {
+        xSemaphoreGive(g_ota_mutex);
+        ESP_LOGI(TAG, "OTA 互斥锁就绪");
+    }
+
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = HTTP_SERVER_PORT;
@@ -389,6 +614,20 @@ void http_server_start(void) {
         .handler = api_capture_handler, .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &uri_api_capture);
+
+    // --- OTA 路由 ---
+    httpd_uri_t uri_ota_upload = {
+        .uri = "/upload", .method = HTTP_POST,
+        .handler = upload_handler, .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &uri_ota_upload);
+
+    httpd_uri_t uri_ota_progress = {
+        .uri = "/progress", .method = HTTP_GET,
+        .handler = progress_handler, .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &uri_ota_progress);
+
 
     esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (sta_netif != NULL) {

@@ -10,11 +10,6 @@
 #define MQTT_PASSWORD "123456"
 #define MQTT_CLIENT_ID "esp32cam_client"
 #define MQTT_CONTROL_TOPIC "camera/control"
-#define MQTT_IMAGE_TOPIC "camera/image"
-#define MQTT_STREAM_TOPIC "camera/stream"
 
 void mqtt_app_start(void);
-void start_video_stream(void);
-void stop_video_stream(void);
-
 #endif

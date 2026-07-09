@@ -1,166 +1,156 @@
-﻿# ESP32-CAM + OV2640 轻量监控系统 📹
+﻿# ESP32-CAM 嵌入式网络摄像头
 
-## 视频流展示图
-- 图中的光斑为电脑屏幕反射的补光灯的灯光
-> - ![网页控制面板图](docs/images/网页控制面板.png)
+> 基于 ESP32-CAM（OV2640 + PSRAM）的嵌入式网络摄像头系统。提供 Web 控制面板实现实时 MJPEG 视频流、LED 补光灯调节、一键拍照，支持 A/B 分区 OTA 固件升级与 Bootloader 自动回滚，同时具备 MQTT 远程指令通道。
 
-## 项目简介 ✨
-本仓库基于 ESP32-CAM 开发板与 OV2640 摄像头，实现了一套低成本轻量监控系统，支持局域网实时监控、公网访问（内网穿透）及 MQTT 远程控制功能。作为大三计算机专业学生的嵌入式练手项目，代码注重实战性与可维护性，适合作为嵌入式 / 物联网方向的简历项目案例。
+---
 
+**Web 控制面板**
 
+![网页控制面板](docs/images/网页控制面板.png)
 
-## 固件功能清单 🚀
+浏览器访问 `http://esp32cam.local:8080`，即开即用。实时 MJPEG 画面（640×480 @ 30fps）、视频流启停开关、Gamma 校正补光灯滑块（5kHz PWM / 10-bit / Gamma 2.2）、固件升级（上传进度条 + SSE 状态推送），预留一键拍照下载功能。
 
-### 核心功能 (已实现)
-- 📹 摄像头采集：固定VGA(640×480)分辨率，JPEG格式输出
-- 🔗 WiFi连接：STA模式自动重连(5次重试)，成功后打印IP
-- 🌐 HTTP服务：8080端口提供视频流，控制面板支持最多 5 路并发
-- 🌐 **网页控制面板**：浏览器一键操控，视频流开关 + 补光灯 PWM 无极调光
-- 🔍 **mDNS 设备发现**：浏览器输入 `esp32cam.local:8080` 直达，无需手动查 IP
-- 📡 MQTT 通信：基于 EMQX 搭建服务端，ESP32-CAM 作为客户端实现双向通信
-- 📱 微信小程序：开发配套小程序客户端，通过MQTT协议连接ESP32-CAM，支持视频流查看指令发送
+---
 
-### 扩展功能 (待开发)
-- 📸 网页 OTA 固件升级（HTTP POST 上传 + SSE 进度反馈）
-- 🌍 内网穿透：Ngrok实现公网访问 (Ngrok免费版已测试完成，部署过程之后完善)
+## 核心功能
 
-## 🌐 网页控制面板
+### 1. 双分区 OTA 固件升级与自动回滚
+- 支持Web端可视化升级，实时展示上传与进度，通过SSE推送状态
+- 提供本地Web上传并预留MQTT远程URL触发，覆盖不同运维场景
+- 采用ota_0/ota_1双分区设计，Bootloader自动校验固件，异常自动回滚
+- 升级异常可自动恢复摄像头运行，无需手动重启，保障设备持续可用
 
-> 无需任何客户端工具 —— 浏览器打开即用，替代串口 + MQTTX + Python HTTP 服务器。
+### 2. 异步 MJPEG 视频流架构
+- 解决HTTP Server单任务导致的长连接阻塞控制请求的问题
+- 基于FreeRTOS创建独立推流任务，与主HTTP服务完全解耦并行运行
+- 视频流与控制指令互不干扰，确保控制操作保持毫秒级响应速度
+- 遵循标准MJPEG流协议，主流浏览器无需额外插件即可直接播放
 
-### 访问方式
+### 3. Web 可视化控制面板
+- 前端资源完整内嵌固件，无需单独部署前端工程，开箱即可使用
+- 提供实时MJPEG视频预览，支持一键启停流，画面稳定传输
+- 补光灯采用PWM调光，加入节流防抖与Gamma 2.2校正，调光均匀自然
+
+### 4. 远程控制与硬件安全机制
+- 提供轻量级MQTT控制通道用于后续扩展，仅传输控制指令，网络带宽占用极低
+- 引入二值信号量保护摄像头资源，避免并发访问引发内存越界异常
+- 关键路径异常容错机制，覆盖 WiFi断连、OTA 升级异常等核心场景
+
+### 扩展方向
+- Web 配网与参数持久化：新增AP模式Web配网，替换硬编码的WiFi/MQTT凭证，配置存入NVS，设备重启自动保留。
+- OTA 流式写入优化：将Web OTA改为流式边收边写模式，省去固件全量PSRAM缓存，降低内存峰值占用。
+- MQTT 远程指令扩展：扩展MQTT指令集，新增补光灯调光、设备状态上报，全程仅传输控制指令字符串。
+
+---
+
+## 系统架构
+
 ```
-# mDNS 零配置（推荐）
-http://esp32cam.local:8080
-
-# 或直接用 IP
-http://<设备IP>:8080
+┌─────────────────────────────────────────────────────────────┐
+│                    浏览器 (esp32cam.local:8080)             │
+│    MJPEG 视频流   │  API 控制 (LED调光/视频开关)  │ OTA 上传  │
+└──────────────────┼──────────────────────────────┼───────────┘
+                   ▼                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    HTTP Server (端口 8080)                    │
+│  ┌───────────────────┐  ┌──────────────────────────────────┐  │
+│  │   同步路由 /api/*  │  │  异步 MJPEG 推流 /stream          │ │
+│  │   POST /upload     │  │  FreeRTOS 独立任务               │  │
+│  │   GET /progress    │  │  (不阻塞 HTTP Server)            │  │
+│  └─────────┬─────────┘  └────────────────┬─────────────────┘  │
+└────────────┼─────────────────────────────┼────────────────────┘
+             │                             │
+    ┌────────┼──────────┐                  │
+    ▼        ▼          ▼                  │ 
+┌───────┐ ┌──────┐ ┌──────────┐            │
+│Camera │ │LEDC  │ │ OTA 分区 │            │
+│OV2640 │ │PWM   │ │ ota_0    │            │
+│Semaph.│ │GPIO4 │ │ ota_1    │            │
+└───┬───┘ └──────┘ └────┬─────┘            │
+    │                   │                  │
+    └────────┬──────────┘                  │
+             │                             │
+             ▼                             │
+┌──────────────────────────┐   ┌───────────┴────────────┐
+│   WiFi STA + mDNS        │   │  MQTT Client           │
+│   esp32cam.local         │   │  (纯控制通道, 不传数据)  │
+│   自动重连 (5次)          │   │  take_picture /        │
+│                          │   │  ota_update <url>      │
+└──────────────────────────┘   └────────────────────────┘
 ```
 
-### 面板功能
+**协议分工：**
 
-| 功能 | 路由 | 说明 |
+| 协议 | 传输内容 | 设计原则 |
+|------|----------|----------|
+| **HTTP** (端口 8080) | MJPEG 视频流、控制 API、OTA 上传、SSE 进度 | 大数据通道，浏览器直连 |
+| **MQTT** (1883) | 控制命令字符串 | 轻量指令下发，不传图像数据 |
+
+---
+
+## 技术栈
+
+| 层级 | 技术 | 说明 |
 |------|------|------|
-| **MJPEG 视频流** | `GET /stream` | 浏览器原生 multipart/x-mixed-replace，30fps，异步 handler 不阻塞 API |
-| **视频流开关** | `GET /api/stream?action=start\|stop` | Toggle Switch 启停 HTTP 视频流 |
-| **补光灯调光** | `GET /api/led?brightness=0~100` | LEDC PWM 5kHz 10-bit + Gamma 2.2 矫正，Slider 实时渐变 |
-| **OTA 升级** | `POST /upload` | 网页选 .bin 上传，SSE 进度反馈（开发中） |
-| **拍照** | `GET /api/capture` | 浏览器下载 JPEG 照片 （开发中）|
-
-### 技术要点
-
-- **异步 MJPEG**：`stream_task` 在独立 FreeRTOS 任务中运行，`httpd_req_async_handler_begin()` 释放 HTTP Server 任务，确保 API 请求不被阻塞
-- **LED PWM 无极调光**：GPIO4 经 NPN 反相驱动（低电平=灭），Gamma 2.2 校正模拟人眼非线性亮度感知
-- **纯 HTTP 协议**：控制面板完全基于 HTTP/1.1，不依赖 MQTT（MQTT 仅保留用于远程指令/小程序）
-
-## 开发环境 🛠️
-- 操作系统：Windows 11
-- 开发工具：VSCode
-- 框架版本：ESP-IDF v5.5.0（这是我之前下载的，截至2025.10.16，官方最新稳定版本是 v5.5.1）
-    👉 [ESP-IDF官方安装教程https://docs.espressif.com/projects/esp-idf/zh_CN/release-v5.5/esp32/get-started/index.html#get-started-how-to-get-esp-idf](https://docs.espressif.com/projects/esp-idf/zh_CN/release-v5.5/esp32/get-started/index.html#get-started-how-to-get-esp-idf)
-
-## 快速上手 🚀
-1. 克隆仓库并进入固件目录
-   ```bash
-   git clone <仓库地址>
-   cd esp32-cam/esp32cam_firmware
-   ```
-2. 配置WiFi参数，修改http视频流端口号和帧率（使用VSCODE）
-   在此路径文件中修改wifi配置：esp32cam_firmware\main\wifi.h
-   修改http视频流配置：esp32cam_firmware\main\http_server.h
-3. 分区表配置（重要！否则可能会编译失败）
-   由于代码未优化，生成的.bin固件大小可能超过默认分区表factory分区容量（通常为1MB），会导致如下报错：
-   ```
-   Error: app partition is too small for binary camera_test.bin size 0x10b070:
-   Part 'factory' 0/0 @ 0x10000 size 0x100000 (overflow 0xb070)
-   ```
-   **解决方案**：
-   - 第一步(本仓库已实现，直接做第二步)：在项目根目录新建 `partitions.csv`文件并添加以下内容，将factory分区容量增加至1.5MB：
-   ```csv
-   # Name,   Type, SubType, Offset,  Size, Flags
-   nvs,      data, nvs,     0x9000,  0x6000,
-   phy_init, data, phy,     0xf000,  0x1000,
-   factory,  app,  factory, 0x10000, 0x150000,
-   ```
-   - 第二步：通过menuconfig指定自定义分区表
-   运行命令打开图形界面：
-   ```bash
-   idf.py menuconfig
-   ```
-   导航路径：`Partition Table → 选择Custom partition table CSV → 在Custom partition CSV file中输入partitions.csv`，保存退出。
-4. 启用PSRAM配置（解决摄像头初始化失败问题）
-   若串口日志中出现`PSRAM可用: 0 字节`或`摄像头初始化失败`，需配置启用PSRAM：
-   运行以下命令打开图形配置界面：
-   ```bash
-   idf.py menuconfig
-   ```
-   依次导航并开启以下设置：
-      路径：`Component config → ESP32-specific config → Support for external, SPI-connected RAM`（启用外部SPI连接的RAM支持）
-      路径：`Component config → SPI RAM config → Initialize SPI RAM when booting the ESP32`（启动时初始化SPI RAM）
-5. 编译烧录 (使用ESP-IDF终端，并替换COMx为实际串口)
-   ```bash
-   idf.py -p COMx flash monitor
-   ```
-6. 浏览器访问 `http://esp32cam.local:8080`（mDNS）或串口打印的IP地址即可进入网页控制面板 👀
-
-## 注意事项 ⚠️
-- 必须使用≥1A电源，否则摄像头可能初始化失败，根据商家资料得知，输入电源低于5V2A时，图片可能会出现水纹⚡
-- 仅支持2.4GHz WiFi，5GHz频段无法连接 📶
-- 扩展功能开发前建议检查Flash剩余容量(初始化时串口会输出剩余Flash物理容量) 💾
-- Windows 访问 `esp32cam.local` 需安装 Bonjour 服务（iTunes 自带，或苹果官网下载）
-
-## 关于项目 📝
-这是我作为大三计算机专业学生的嵌入式练手项目，主打一个"从0到1"的实战过程。目前已实现 HTTP 视频流 + 网页控制面板（补光灯调光/视频流开关）+ MQTT 远程控制 + 微信小程序。后续会持续迭代扩展功能。如果对你有帮助，欢迎star🌟 鼓励一下~
+| 实时系统 | FreeRTOS（ESP-IDF v5.5） | 任务调度、信号量、事件组 |
+| 硬件驱动 | OV2640 + LEDC PWM + GPIO | XCLK 10MHz、PWM 5kHz / 10-bit / Gamma 2.2 |
+| 网络通信 | WiFi STA + LwIP + mDNS + HTTP Server | 异步 handler、mDNS 主机名 `esp32cam` |
+| 应用协议 | HTTP/1.1 + MQTT | multipart/form-data 解析、SSE 推送 |
+| 存储 | 4MB SPI Flash + 8MB PSRAM | OTA A/B 双分区、NVS |
 
 
-## 项目进展 🚧
+---
 
-### ✅ 已完成
-- [√] ESP32-CAM硬件基础配置
-- [√] WiFi连接功能实现 (含 mDNS 设备发现)
-- [√] HTTP视频流服务搭建 (异步 handler, 5 路并发)
-- [√] 网页控制面板 (视频流开关 + 补光灯 PWM 调光)
-- [√] MQTT通信功能实现
-- [√] 微信小程序开发
-- [√] 前端-硬件打通，实现实时视频流查看
+## 快速上手
 
-### 🚧 进行中
-- [ ] 网页 OTA 固件上传升级 (HTTP POST + SSE 进度)
-- [ ] MQTT 远程控制功能完善
+```bash
+# 1. 进入固件工程目录
+cd esp32cam_firmware
 
-### 🎯 下一步计划
-1. 完成网页 OTA 固件升级功能，支持浏览器选 .bin 文件上传升级
-2. 重构项目架构：MQTT 仅保留控制指令，HTTP 负责视频流 + OTA
-3. 开发内网穿透功能，实现公网访问
+# 2. 配置 WiFi 和 MQTT 参数
+# 编辑 main/wifi.h: WIFI_SSID / WIFI_PWD
+# 编辑 main/mqtt.h: MQTT_BROKER_URI / MQTT_USERNAME / MQTT_PASSWORD
 
-最后附上硬件参数，有任何问题欢迎提Issue，一起交流学习呀！😊
+# 3. 编译、烧录、监视串口
+idf.py set-target esp32
+idf.py build
+idf.py -p COM7 flash monitor
+```
 
-## 硬件参数速览 📊
-### 🖥️ ESP32-CAM 模块核心参数
-| 特性 | 详情 |
-|------|------|
-| 处理器 | 双核240MHz ESP32，支持蓝牙4.2 + BLE 🛜 |
-| 存储配置 | 4Mb SPI Flash +520kB SRAM + 4MB PSRAM (超大扩展内存) 💾 |
-| WiFi性能 | 2.4GHz频段，支持802.11b/g/n，板载2dBi天线 📶 |
-| 功耗控制 | Deep-sleep模式最低6mA，节能小能手 🌙 |
-| 扩展接口 | 支持TF卡(最大4GB)、UART/SPI/I2C等 🔌 |
-| 供电要求 | 4.75-5.25V，≥1A电源适配器，⚠须注意：输入电源低于5V2A时，图片会有几率出现水纹⚡|
+> **注意**：仅支持 2.4GHz WiFi。ESP32-CAM 没有 USB 转串口芯片，需接下载扩展版或者 USB-TTL（3.3V）。
 
+### 使用
 
-### 📸 OV2640 摄像头核心参数
-| 特性 | 详情 |
-|------|------|
-| 最高分辨率 | UXGA(1600×1200)@15fps 🚀 |
-| 主流配置 | SVGA(800×600) / VGA(640×480)|
-| 最大帧率 |UXGA(1600*1200)@15 帧；SVGA(800*600)@30帧；CIF(352*288)@60帧 |
-| 输出格式 | 支持JPEG/RGB/YUV等，本项目用JPEG优化传输 📦 |
-| 镜头参数 | F2.0光圈 + 78°广角 + 3.6mm焦距 🔍 |
-| 接口类型 | 8位数据总线 + SCCB控制接口 (类I²C) |
-- esp32-cam外观图（左侧OV2640摄像头，中间ESP32-CAM开发板，右侧烧录扩展板）
-![esp32cam外观图](docs/images/esp32cam开发板与扩展板.jpg)
-- 开发板芯片模组面图
-![esp32cam正面图](docs/images/开发板正面图.jpg)
+1. 设备启动后，串口打印 IP 地址
+2. 浏览器打开 `http://esp32cam.local:8080` 或打印的 IP
+3. 首次使用建议测试 OTA 升级流程验证功能完整性
 
+### 固件工程结构
 
+```
+esp32cam_firmware/
+├── main/                      # 应用源码
+│   ├── main.c                 # 启动流程、Flash 容量诊断、健康自检
+│   ├── camera.c / .h          # OV2640 驱动：Semaphore 防竞态、断电/重初始化
+│   ├── http_server.c / .h     # HTTP Server：异步 MJPEG、API、OTA 上传+SSE
+│   ├── wifi.c / .h            # WiFi STA + mDNS：EventGroup 同步、自动重连
+│   ├── mqtt.c / .h            # MQTT Client：远程指令接收（控制通道）
+│   └── CMakeLists.txt
+├── components/
+│   ├── ota/                   # OTA 组件：HTTP 下载 + Flash 写入 + 分区切换
+│   └── esp32-camera/          # 摄像头驱动（espressif 官方组件）
+├── managed_components/
+│   └── espressif__mdns/       # mDNS 服务（espressif 官方组件）
+├── partitions.csv             # 自定义分区表：ota_0 + ota_1 各约 1.31MB
+└── docs/
+    ├── 网页控制面板调试记录.md   # HTTP 阻塞问题排查全过程
+    └── 坏固件回滚.md           # OTA 回滚验证日志与分析
+```
 
+---
 
+## 其他信息
+
+- **硬件**：AI-Thinker ESP32-CAM（ESP32 + OV2640 + 8MB PSRAM + 4MB Flash）
+- **开发环境**：window11、VS Code + ESP-IDF v5.5 插件
+- **参考**：ESP-IDF 官方示例（`camera_web_server`、`native_ota`）、espressif/esp32-camera 组件
